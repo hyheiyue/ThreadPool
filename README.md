@@ -31,8 +31,6 @@
 You can construct a `ThreadPool` with configurable parameters such as the number of worker threads, the maximum number of pending tasks, and the maximum task timeout duration.
 
 ```cpp
-cpp
-复制编辑
 ThreadPool pool(4, 100, 100);  // 4 threads, max 100 tasks, 100 ms timeout
 ```
 
