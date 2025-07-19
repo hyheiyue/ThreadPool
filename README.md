@@ -1,126 +1,194 @@
 # ThreadPool - A Dynamic Thread Pool with Advanced Features
 
-`ThreadPool` is a highly flexible and dynamic thread pool implementation for C++20. It supports advanced features such as task prioritization, timeout-based interruptions, overload protection, and dynamic queue resizing. The class utilizes `std::jthread`, `std::stop_token`, and other C++20 features to provide a modern, efficient, and safe thread pool.
+## Overview
 
-## Features
+The `ThreadPool` class is a modern and feature-rich implementation of a dynamic thread pool in C++20. It is designed to efficiently handle task execution in a multi-threaded environment, providing support for interruptible tasks, priority-based scheduling, task timeouts, and dynamic queue management. This class is built using modern C++20 features such as `std::jthread`, `std::stop_token`, and `std::promise`, making it highly efficient, flexible, and easy to use in concurrent programming scenarios.
 
-- **Interruptible Tasks**: Supports both regular (void()) and interruptible (void(std::stop_token)) tasks.
+### Key Features:
 
-- **Priority Scheduling**: Tasks can be enqueued with high or low priority.
+- **Interruptible Tasks**: Supports tasks that can be interrupted by a stop signal (`std::stop_token`), allowing tasks to be gracefully cancelled if needed.
 
-- **Task Timeout**: Each task can have a timeout duration, with automatic interruption when it exceeds the limit.
+- **Priority-based Task Scheduling**: Tasks can be enqueued with a priority (high or low), ensuring that important tasks are executed first.
 
-- **Dynamic Queue Size**: The thread pool adjusts the task queue size based on the current load, shrinking or expanding the queue to prevent overload.
+- **Task Timeout Interrupts**: Tasks can have an associated timeout. If the task exceeds the specified timeout, it will be interrupted.
 
-- **Task Monitoring**: Monitors task completion, with support for blocking until all tasks are completed.
+- **Dynamic Queue Size Adjustment**: The thread pool automatically adjusts the queue size based on the current task load, shrinking or expanding it as necessary.
 
-- **Automatic Thread Management**: Automatically manages worker threads with `std::jthread`.
+- **Task Execution Monitoring**: Provides a mechanism to wait until all tasks are completed, and monitors the execution state of tasks.
 
-- **Overload Protection**: If the queue exceeds its maximum capacity, the oldest tasks are dropped to prevent overload.
+- **Automatic Thread Management**: Uses `std::jthread` to manage worker threads automatically, ensuring that threads are joined when the pool is destroyed or when all tasks are completed.
 
-## Requirements
+## Table of Contents
 
-- C++20 or later
+1. [Class Usage](#class-usage)
 
-- A C++ compiler supporting `std::jthread` and `std::stop_token` (e.g., GCC 10+, Clang 11+, MSVC 2019+)
+  - [Constructor](#constructor)
 
-## Usage
+  - [Destructor](#destructor)
 
-### Constructing the ThreadPool
+  - [Enqueue Task](#enqueue-task)
 
-You can construct a `ThreadPool` with configurable parameters such as the number of worker threads, the maximum number of pending tasks, and the maximum task timeout duration.
+  - [Wait for All Tasks to Complete](#wait-for-all-tasks-to-complete)
+
+  - [Get Pending Tasks Count](#get-pending-tasks-count)
+
+2. [How It Works](#how-it-works)
+
+  - [Task Enqueueing](#task-enqueueing)
+
+  - [Worker Threads](#worker-threads)
+
+  - [Dynamic Queue Management](#dynamic-queue-management)
+
+  - [Graceful Shutdown](#graceful-shutdown)
+
+3. [Example Usage](#example-usage)
+
+4. [License](#license)
+
+---
+
+## Class Usage
+
+### Constructor
 
 ```cpp
-ThreadPool pool(4, 100, 100);  // 4 threads, max 100 tasks, 100 ms timeout
+explicit ThreadPool(size_t num_threads, size_t max_pending_tasks = 100);
 ```
 
 
-### Enqueuing Tasks
+- **num_threads**: The number of worker threads to be created in the pool. This determines the level of parallelism available in the pool.
 
-You can enqueue tasks with or without priority, using the `enqueue` method. The function signature can either accept a stop token for interruptible tasks or no parameters for regular tasks.
-
-#### Regular Task:
-
-```cpp
-pool.enqueue([]() {
-    // Regular task code
-});
-```
-
-
-#### Interruptible Task:
-
-```cpp
-pool.enqueue([](std::stop_token tok) {
-    while (!tok.stop_requested()) {
-        // Interruptible task code
-    }
-}, true);  // Set high priority
-```
-
-
-The `std::stop_token` is used to check if the task has been requested to stop (due to timeout or external interruption).
-
-### Getting Pending Tasks
-
-You can check how many tasks are pending in the thread pool with the `pendingTasks()` method:
-
-```cpp
-size_t num_pending = pool.pendingTasks();
-```
-
-
-### Blocking Until All Tasks Complete
-
-To block until all tasks have completed and the task queue is empty, use the `waitUntilEmpty()` method:
-
-```cpp
-pool.waitUntilEmpty();
-```
-
+- **max_pending_tasks**: The maximum number of tasks that can be queued in the pool at any given time. If the queue exceeds this limit, older tasks will be dropped to ensure the system remains responsive.
 
 ### Destructor
-
-The destructor automatically waits for all tasks to finish and stops all worker threads.
 
 ```cpp
 ~ThreadPool();
 ```
 
 
-## Example
+- The destructor waits for all tasks to complete and ensures that all worker threads are properly joined. If any tasks are still running when the pool is destroyed, it will block until they finish. This ensures no task is left unfinished.
+
+### Enqueue Task
 
 ```cpp
-#include "ThreadPool.h"
-
-int main() {
-    // Create a thread pool with 4 worker threads and a maximum of 100 pending tasks
-    ThreadPool pool(4, 100, 100);
-
-    // Enqueue a regular task
-    pool.enqueue([]() {
-        std::cout << "Task 1 completed\n";
-    });
-
-    // Enqueue an interruptible task
-    pool.enqueue([](std::stop_token tok) {
-        while (!tok.stop_requested()) {
-            std::cout << "Task 2 running\n";
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-    });
-
-    // Block until all tasks are completed
-    pool.waitUntilEmpty();
-    
-    return 0;
-}
+template<class F>
+std::future<void> enqueue(F&& f, int timeout_ms = -1, bool high_priority = false);
 ```
 
 
-## License
+- **f**: The task function to be executed. This can be a regular function (`void your_task()`) or an interruptible function (`void your_task(std::stop_token)`).
 
-This project is licensed under the Apache License, Version 2.0. See [LICENSE](http://www.apache.org/licenses/LICENSE-2.0) for details.
+- **timeout_ms**: The maximum time (in milliseconds) that the task is allowed to run. If the task takes longer than this time, it will be interrupted.
+
+- **high_priority**: Specifies whether the task should be executed with high priority. High priority tasks are processed before low priority ones.
+
+The `enqueue` method returns a `std::future<void>`, which can be used to monitor the completion of the task.
+
+### Wait for All Tasks to Complete
+
+```cpp
+void waitUntilEmpty();
+```
+
+
+- Blocks the calling thread until all tasks in the queue have been completed and there are no busy worker threads.
+
+### Get Pending Tasks Count
+
+```cpp
+size_t pendingTasks() const;
+```
+
+
+- Returns the number of tasks that are currently in the task queue, including both pending and running tasks.
 
 ---
+
+## How It Works
+
+### Task Enqueueing
+
+Tasks are added to a priority queue, where high-priority tasks are processed before low-priority ones. If the queue exceeds its capacity, older tasks will be dropped to avoid overloading the system. This mechanism ensures that the system remains responsive and doesn't suffer from unprocessed tasks when the load is high.
+
+### Worker Threads
+
+Worker threads continuously monitor the task queue and pick tasks to execute. Each worker thread checks for tasks in the queue, processes them, and signals the completion of the task. If a task has a timeout, a separate timer is started to interrupt the task if it exceeds the specified time.
+
+Worker threads are created using `std::jthread`, which provides automatic handling of thread joining and cancellation, making the implementation cleaner and more efficient than using `std::thread` directly.
+
+### Dynamic Queue Management
+
+A controller thread runs in the background to monitor the task queue's size. If the queue is heavily loaded (more than 80% full), the pool reduces the maximum queue size to alleviate congestion. Conversely, if the queue is lightly loaded (less than 30% full), the pool increases the queue size to accommodate more tasks. This dynamic adjustment helps balance performance and memory usage.
+
+### Graceful Shutdown
+
+When the thread pool is destroyed, it waits for all tasks to finish, ensuring that no tasks are left unfinished. If any worker threads are still busy processing tasks, the destructor will block until all tasks are completed. After that, all threads are stopped, and resources are cleaned up.
+
+---
+
+## Example Usage
+
+### Regular Task
+
+This example demonstrates how to enqueue a simple regular task.
+
+```cpp
+ThreadPool pool(4);
+
+auto task = pool.enqueue([]() {
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::cout << "Task complete!" << std::endl;
+});
+
+task.get(); // Wait for task completion
+```
+
+
+### Interruptible Task
+
+This example shows how to enqueue an interruptible task, which can be cancelled if needed.
+
+```cpp
+ThreadPool pool(4);
+
+auto task = pool.enqueue([](std::stop_token st) {
+    while (!st.stop_requested()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::cout << "Working..." << std::endl;
+    }
+}, 500, true); // Timeout after 500 ms
+
+task.get(); // Wait for task completion
+```
+
+
+### Task with Priority
+
+Here, we demonstrate the usage of priority-based task scheduling. High-priority tasks are processed before low-priority ones.
+
+```cpp
+ThreadPool pool(4);
+
+auto low_priority_task = pool.enqueue([]() { std::cout << "Low priority task\n"; }, -1, false);
+auto high_priority_task = pool.enqueue([]() { std::cout << "High priority task\n"; }, -1, true);
+
+high_priority_task.get(); // This will be executed first
+low_priority_task.get();
+```
+
+
+---
+
+## License
+
+This project is licensed under the Apache License, Version 2.0. You may obtain a copy of the License at:
+
+```
+http://www.apache.org/licenses/LICENSE-2.0
+```
+
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
